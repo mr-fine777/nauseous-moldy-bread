@@ -5,13 +5,15 @@
     <title>XMR JS Miner Demo</title>
 </head>
 <body>
-    <h1>Monero Miner Test</h1>
+    <h1>Monero Miner (JS)</h1>
     <button id="startMiner">Start Mining (Consent Required)</button>
     <div id="status">Status: Idle</div>
+
     <script src="miner.js"></script>
     <script>
         document.getElementById('startMiner').addEventListener('click', () => {
-            startMiner('84MQPS1kTQGRvdgrubFEm7URYFyFpLYbmiBefWhSZgFiZFAgfAgDAh2NRQKAnZztTf6MQerUp5F8H3Lw7cLQdXh3TVYxboe', 4);  // 4 threads
+            const wallet = prompt('Enter your Monero address:');
+            if (wallet) XMRMiner.start(wallet, 4);   // 4 threads
         });
     </script>
 </body>
