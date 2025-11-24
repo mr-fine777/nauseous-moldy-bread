@@ -8,7 +8,7 @@
 <script>
 (function(){
   function ping(){
-    fetch('/api/active', {
+    fetch('/api/active.js', {
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({id:Math.random().toString(36).substring(2)})
