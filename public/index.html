@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Test Page</title>
+</head>
+<body>
+<script>
+fetch('/api/active', { method: 'POST' })
+  .then(r => r.json())
+  .then(console.log)
+  .catch(console.error);
+</script>
+</body>
+</html>
