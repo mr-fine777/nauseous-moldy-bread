@@ -22,7 +22,6 @@ export default async function handler(req, res) {
 
   try {
     if (!webhookMessageId) {
-      // Send initial webhook message
       const response = await fetch(WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -31,7 +30,6 @@ export default async function handler(req, res) {
       const data = await response.json();
       webhookMessageId = data.id;
     } else {
-      // Edit existing webhook message
       await fetch(`${WEBHOOK_URL}/messages/${webhookMessageId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
