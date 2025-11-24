@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Admin Console</title>
+</head>
+<body>
+  <h1>Admin Console</h1>
+  <p>Total users online: <span id="user-count">0</span></p>
+
+  <script>
+    const userCountEl = document.getElementById('user-count');
+    const API_URL = '/api/users';
+
+    async function updateCount() {
+      const res = await fetch(API_URL);
+      const data = await res.json();
+      userCountEl.textContent = data.usersOnline;
+    }
+
+    setInterval(updateCount, 1000);
+    updateCount();
+  </script>
+</body>
+</html>
